@@ -224,6 +224,91 @@ public class MOEAD {
 		}
 	}
 
+//	public MOEAD(String[] args) {
+//		parseParamsFile(args[0]);
+//
+//		// Read in any additional parameters
+//		for (int i = 1; i < args.length; i +=2) {
+//			setParam(args[i], args[i+1]);
+//		}
+//
+//		int generation = 0;
+//		indType.setInit(this);
+//
+//		// Initialise
+//		long startTime = System.currentTimeMillis();
+//		Set<Individual> externalPopulation = new HashSet<Individual>();
+//
+//		initialise();
+//		breedingTime[generation] = System.currentTimeMillis() - startTime;
+//
+//		// While stopping criteria not met
+//		while(!stopCrit.stoppingCriteriaMet()) {
+//			startTime = System.currentTimeMillis();
+//			// Create an array to hold the new generation
+//			Individual[] newGeneration = new Individual[popSize];
+//			System.arraycopy(population, 0, newGeneration, 0, popSize);
+//
+//			// Evolve new individuals for each problem
+//			for (int i = 0; i < popSize; i++) {
+//				Individual oldInd = population[i];
+//				Individual newInd = evolveNewIndividual(oldInd, i, random);
+//
+//				// Update individual itself
+//				double oldScore;
+//				if (tchebycheff)
+//					oldScore = calculateTchebycheffScore(population[i], i);
+//				else
+//					oldScore = calculateScore(population[i], i);
+//
+//				double newScore;
+//				if (tchebycheff)
+//					newScore = calculateTchebycheffScore(newInd, i);
+//				else
+//					newScore= calculateScore(newInd, i);
+//				if (newScore < oldScore) {
+//					// Replace neighbour with new solution in new generation
+//					newGeneration[i] = newInd;
+//				}
+//
+//				// Update neighbours
+//				updateNeighbours(newInd, i, newGeneration);
+//				// Update reference points
+//				if (tchebycheff)
+//					updateReference(newInd);
+//			}
+//			// If using dynamic normalisation, finish evaluating the population
+//			if (dynamicNormalisation)
+//				finishEvaluating();
+//			// Copy the next generation over as the new population
+//			population = newGeneration;
+//			// Update the external population
+//			Collections.addAll(externalPopulation, population);
+//			externalPopulation = produceParetoFront(externalPopulation);
+//			long endTime = System.currentTimeMillis();
+//			evaluationTime[generation] = endTime - startTime;
+//			// Write out stats
+//			writeOutStatistics(outWriter, generation);
+//			generation++;
+//		}
+//
+//		// Write the front to disk
+//		writeFrontStatistics(frontWriter, externalPopulation);
+//
+//		// Close writers
+//		try {
+//			outWriter.close();
+//			frontWriter.close();
+//		}
+//		catch (IOException e) {
+//			System.err.println("Cannot close stat writers.");
+//			e.printStackTrace();
+//		}
+//
+//		System.out.println("Done!");
+//
+//	}
+
 	public MOEAD(String[] args) {
 		parseParamsFile(args[0]);
 
@@ -238,6 +323,7 @@ public class MOEAD {
 		// Initialise
 		long startTime = System.currentTimeMillis();
 		Set<Individual> externalPopulation = new HashSet<Individual>();
+		Set<Individual> offspringPopulation = new HashSet<Individual>();
 
 		initialise();
 		breedingTime[generation] = System.currentTimeMillis() - startTime;
@@ -245,46 +331,37 @@ public class MOEAD {
 		// While stopping criteria not met
 		while(!stopCrit.stoppingCriteriaMet()) {
 			startTime = System.currentTimeMillis();
-			// Create an array to hold the new generation
-			Individual[] newGeneration = new Individual[popSize];
-			System.arraycopy(population, 0, newGeneration, 0, popSize);
 
-			// Evolve new individuals for each problem
-			for (int i = 0; i < popSize; i++) {
-				Individual oldInd = population[i];
-				Individual newInd = evolveNewIndividual(oldInd, i, random);
+			offspringPopulation.clear();
 
-				// Update individual itself
-				double oldScore;
-				if (tchebycheff)
-					oldScore = calculateTchebycheffScore(population[i], i);
-				else
-					oldScore = calculateScore(population[i], i);
+			// Assign each subproblem a unique representative from the population
+			assignRepresentatives(population);
 
-				double newScore;
-				if (tchebycheff)
-					newScore = calculateTchebycheffScore(newInd, i);
-				else
-					newScore= calculateScore(newInd, i);
-				if (newScore < oldScore) {
-					// Replace neighbour with new solution in new generation
-					newGeneration[i] = newInd;
-				}
+			// For each subproblem
+			for(int i = 0; i < popSize; i++) {
 
-				// Update neighbours
-				updateNeighbours(newInd, i, newGeneration);
-				// Update reference points
-				if (tchebycheff)
-					updateReference(newInd);
+				// Apply operators to randomly chosen individuals in each subpopulation
+				Individual newInd = evolveNewIndividual(i, random);
+				offspringPopulation.add(newInd);
+
+				// Update external population
+				externalPopulation.add(newInd);
+				externalPopulation = produceParetoFront(externalPopulation);
+				long endTime = System.currentTimeMillis();
+				evaluationTime[generation] = endTime - startTime;
+				// Write out stats
+				writeOutStatistics(outWriter, generation);
+				generation++;
 			}
+
 			// If using dynamic normalisation, finish evaluating the population
 			if (dynamicNormalisation)
-				finishEvaluating();
-			// Copy the next generation over as the new population
-			population = newGeneration;
-			// Update the external population
-			Collections.addAll(externalPopulation, population);
-			externalPopulation = produceParetoFront(externalPopulation);
+				finishEvaluatingOffspring(offspringPopulation);
+
+		    // Sort the solutions in the combination of current main population and the offspring population using NSGA-II sorting. Keep the best N solutions recorded.
+			// XXX
+
+
 			long endTime = System.currentTimeMillis();
 			evaluationTime[generation] = endTime - startTime;
 			// Write out stats
@@ -307,6 +384,42 @@ public class MOEAD {
 
 		System.out.println("Done!");
 
+	}
+
+	/**
+	 * Assigns each element in the population to a given subproblem.
+	 *
+	 * @param population - the population to be assigned to subproblems
+	 */
+	private void assignRepresentatives(Individual[] population) {
+		for (int i = 0; i < popSize - 1; i++) {
+			for (int j = i + 1; j < popSize; j++) {
+				Individual xi = population[i];
+				Individual xj = population[j];
+
+				double obj1xi = xi.getObjectiveValues()[0];
+				double obj1xj = xj.getObjectiveValues()[0];
+				double obj2xi = xi.getObjectiveValues()[1];
+				double obj2xj = xj.getObjectiveValues()[1];
+
+				if (obj2xj < obj2xi || (obj2xj == obj2xi && obj1xj > obj1xi)) {
+					swap(i, j, population);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Swaps the position of two individuals in a population array.
+	 *
+	 *@param index1
+	 *@param index2
+	 *@param pop
+	 */
+	private void swap(int index1, int index2, Individual[] pop) {
+		Individual temp = pop[index1];
+		pop[index1] = pop[index2];
+		pop[index2] = temp;
 	}
 
 	/**
@@ -480,7 +593,7 @@ public class MOEAD {
 	 * @param original
 	 * @return new
 	 */
-	private Individual evolveNewIndividual(Individual original, int index, Random random) {
+	private Individual evolveNewIndividual(int index, Random random) {
 		// Check whether to apply mutation or crossover
 		double r = random.nextDouble();
 		int chosenOperation;
@@ -495,18 +608,28 @@ public class MOEAD {
 
 		// Perform crossover if that is the chosen operation
 		if (chosenOperation == CROSSOVER) {
-			// Select a neighbour at random
-			int neighbourIndex = random.nextInt(numNeighbours);
-			Individual neighbour = population[neighbourIndex];
-			return crossOperator.doCrossover(original.clone(), neighbour.clone(), this);
+			// Select two neighbours at random
+			int neighbour1Index = random.nextInt(numNeighbours);
+			int neighbour2Index = neighbour1Index;
+			while (neighbour2Index != neighbour1Index) {
+				neighbour2Index = random.nextInt(numNeighbours);
+			}
+
+			Individual neighbour1 = population[neighbour1Index];
+			Individual neighbour2 = population[neighbour2Index];
+			return crossOperator.doCrossover(neighbour1.clone(), neighbour2.clone(), this);
 		}
 		// Else, perform mutation
 		else if (chosenOperation == MUTATION) {
-			return mutOperator.mutate(original.clone(), this);
+			// Select a candidate at random
+			Individual neighbour = population[random.nextInt(numNeighbours)];
+			return mutOperator.mutate(neighbour.clone(), this);
 		}
 		// Else, perform local search
 		else if (chosenOperation == LOCAL_SEARCH) {
-			return localOperator.doSearch(original.clone(), this, index);
+			// Select a candidate at random
+			Individual neighbour = population[random.nextInt(numNeighbours)];
+			return localOperator.doSearch(neighbour.clone(), this, index);
 		}
 		else {
 			throw new RuntimeException("Invalid operation selected.");
@@ -1107,9 +1230,6 @@ public class MOEAD {
 	 * This method finishes calculating the objective values for each individual
 	 * according to the QoS bounds found for this generation. If using dynamic
 	 * normalisation, bounds are updated in this process.
-	 *
-	 * @param state
-	 * @param threadnum
 	 */
 	public void finishEvaluating() {
 		// Get population
@@ -1162,6 +1282,75 @@ public class MOEAD {
 
 			// Finish calculating the fitness of each candidate
 			for (Individual ind : population) {
+				ind.finishCalculatingFitness();
+			}
+		}
+	}
+
+	/**
+	 * This method finishes calculating the objective values for each individual,
+	 * both in the current population and in the offspring, according to the QoS
+	 * bounds found for this generation. If using dynamic normalisation, bounds
+	 * are updated in this process.
+	 *
+	 * @param offspringPopulation
+	 */
+	public void finishEvaluatingOffspring(Set<Individual> offspringPopulation) {
+		// Get population
+		double minA = 2.0;
+		double maxA = -1.0;
+		double minR = 2.0;
+		double maxR = -1.0;
+		double minT = Double.MAX_VALUE;
+		double maxT = -1.0;
+		double minC = Double.MAX_VALUE;
+		double maxC = -1.0;
+
+		ArrayList<Individual> currentPlusOffspring = new ArrayList<Individual>();
+		for (Individual ind : population)
+			currentPlusOffspring.add(ind);
+		currentPlusOffspring.addAll(offspringPopulation);
+
+		// Find the normalisation bounds
+		for (Individual ind : currentPlusOffspring) {
+			double a = ind.getAvailability();
+			double r = ind.getReliability();
+			double t = ind.getTime();
+			double c = ind.getCost();
+
+			if (dynamicNormalisation) {
+				if (a < minA)
+					minA = a;
+				if (a > maxA)
+					maxA = a;
+				if (r < minR)
+					minR = r;
+				if (r > maxR)
+					maxR = r;
+				if (t < minT)
+					minT = t;
+				if (t > maxT)
+					maxT = t;
+				if (c < minC)
+					minC = c;
+				if (c > maxC)
+					maxC = c;
+			}
+		}
+
+		if (dynamicNormalisation) {
+			// Update the normalisation bounds with the newly found values
+			minAvailability = minA;
+			maxAvailability = maxA;
+			minReliability = minR;
+			maxReliability = maxR;
+			minCost = minC;
+			maxCost = maxC;
+			minTime = minT;
+			maxTime = maxT;
+
+			// Finish calculating the fitness of each candidate
+			for (Individual ind : currentPlusOffspring) {
 				ind.finishCalculatingFitness();
 			}
 		}
