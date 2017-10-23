@@ -358,8 +358,17 @@ public class MOEAD {
 			if (dynamicNormalisation)
 				finishEvaluatingOffspring(offspringPopulation);
 
-		    // Sort the solutions in the combination of current main population and the offspring population using NSGA-II sorting. Keep the best N solutions recorded.
-			// XXX
+		    // Sort the solutions in the combination of current main population and the offspring population using NSGA-II sorting.
+			List<Individual> currentPlusOffspring = new ArrayList<Individual>();
+			for (Individual ind : population)
+				currentPlusOffspring.add(ind);
+			currentPlusOffspring.addAll(offspringPopulation);
+			
+			performNonDominatedSorting(currentPlusOffspring);
+			
+			// Keep the best N solutions recorded (since it's sorted, the first N solutions)
+			currentPlusOffspring = currentPlusOffspring.subList(0, popSize - 1);
+			currentPlusOffspring.toArray(population);
 
 
 			long endTime = System.currentTimeMillis();
@@ -486,8 +495,8 @@ public class MOEAD {
 		for (int i = 0; i < popSize; i++) {
 			if (numObjectives == 2) {
 				double[] weightVector = new double[2];
-				weightVector[0] = i / (double) popSize;
-				weightVector[1] = (popSize - i) / (double) popSize;
+				weightVector[0] = i / (double) (popSize - 1);
+				weightVector[1] = (popSize - 1 - i) / (double) (popSize - 1);
 				weights[i] = weightVector;
 			}
 			else if (numObjectives == 3) {
@@ -633,37 +642,6 @@ public class MOEAD {
 		}
 		else {
 			throw new RuntimeException("Invalid operation selected.");
-		}
-	}
-
-	/**
-	 * Updates the neighbours of the vector for a given index, changing their associated
-	 * individuals to be the new individual (provided that this new individual is a better
-	 * solution to the problem).
-	 *
-	 * @param newInd
-	 * @param index
-	 */
-	private void updateNeighbours(Individual newInd, int index, Individual[] newGeneration) {
-		// Retrieve neighbourhood indices
-		int[] neighbourhoodIndices = neighbourhood[index];
-		double newScore;
-		if (tchebycheff)
-			newScore = calculateTchebycheffScore(newInd, index);
-		else
-			newScore = calculateScore(newInd, index);
-		double oldScore;
-		for (int nIdx : neighbourhoodIndices) {
-			// Calculate scores for the old solution, versus the new solution
-			if (tchebycheff)
-				oldScore = calculateTchebycheffScore(population[nIdx], index);
-			else
-				oldScore = calculateScore(population[nIdx], index);
-			if (newScore < oldScore) {
-				// Replace neighbour with new solution in new generation
-				newGeneration[nIdx] = newInd.clone();
-			}
-
 		}
 	}
 
@@ -1354,6 +1332,105 @@ public class MOEAD {
 				ind.finishCalculatingFitness();
 			}
 		}
+	}
+	
+	/**
+	 * Performs the non-dominated sorting of the population provided, calculating
+	 * the rank and crowding distance for each of the individuals. Based on the Ruby
+	 * code found at http://www.cleveralgorithms.com/nature-inspired/evolution/nsga.html
+	 * 
+	 * @param population
+	 */
+	private void performNonDominatedSorting(List<Individual> population) {
+		List<List<Individual>> fronts = new ArrayList<List<Individual>>();
+		Map<Individual, Set<Individual>> dominationSetMap = new HashMap<Individual, Set<Individual>>();
+		Map<Individual, Integer> dominationCountMap = new HashMap<Individual, Integer>();
+		for (Individual ind1: population) {
+			for (Individual ind2: population) {
+				if (dominates(ind1, ind2)) {
+					Set<Individual> domSet = dominationSetMap.get(ind1);
+					if (domSet == null) {
+						domSet = new HashSet<Individual>();
+						dominationSetMap.put(ind1, domSet);
+					}
+				}
+				else if (dominates(ind2, ind1)) {
+					Integer domCount = dominationCountMap.get(ind1);
+					if (domCount == null)
+						dominationCountMap.put(ind1, 1);
+					else
+						dominationCountMap.put(ind1, dominationCountMap.get(ind1) + 1);
+				}
+			}
+			Integer count = dominationCountMap.get(ind1);
+			if (count != null && count == 0) {
+				ind1.setRank(0);
+				fronts.set(0, new ArrayList<Individual>());
+				fronts.get(0).add(ind1);
+			}
+		}
+		int current = 0;
+		ArrayList<Individual> nextFront;
+		for () {
+			
+		}
+		
+//		def fast_nondominated_sort(pop) XXX
+//		  fronts = Array.new(1){[]}
+//		  pop.each do |p1|
+//		    p1[:dom_count], p1[:dom_set] = 0, []
+//		    pop.each do |p2|
+//		      if dominates(p1, p2)
+//		        p1[:dom_set] << p2
+//		      elsif dominates(p2, p1)
+//		        p1[:dom_count] += 1
+//		      end
+//		    end
+//		    if p1[:dom_count] == 0
+//		      p1[:rank] = 0
+//		      fronts.first << p1
+//		    end
+//		  end
+//		  curr = 0
+//		  begin
+//		    next_front = []
+//		    fronts[curr].each do |p1|
+//		      p1[:dom_set].each do |p2|
+//		        p2[:dom_count] -= 1
+//		        if p2[:dom_count] == 0
+//		          p2[:rank] = (curr+1)
+//		          next_front << p2
+//		        end
+//		      end
+//		    end
+//		    curr += 1
+//		    fronts << next_front if !next_front.empty?
+//		  end while curr < fronts.size
+//		  return fronts
+//		end
+
+	}
+	
+	/**
+	 * Checks whether the first individual dominates the second one regarding
+	 * all objectives.
+	 * 
+	 * @param ind1
+	 * @param ind2
+	 * @return true if ind1 dominates ind2, false otherwise
+	 */
+	public boolean dominates(Individual ind1, Individual ind2) {
+		boolean equivalent = true;
+		boolean better = false;
+		for (int i = 0; i < numObjectives; i++) {
+			if (ind1.getObjectiveValues()[i] < ind2.getObjectiveValues()[i])
+				better = true;
+			else if (ind1.getObjectiveValues()[i] < ind2.getObjectiveValues()[i]) {
+				equivalent = false;
+				break;
+			}
+		}
+		return equivalent && better;
 	}
 
 	/**

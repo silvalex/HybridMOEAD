@@ -112,5 +112,33 @@ public abstract class Individual implements Cloneable {
 	 * {@inheritDoc}
 	 */
 	public abstract String toString();
+	
+	/**
+	 * Returns the rank for this individual after non-dominated sorting.
+	 * 
+	 * @return rank
+	 */
+	public abstract int getRank();
+	
+	/**
+	 * Sets the rank for this individual after non-dominated sorting.
+	 * 
+	 * @param rank
+	 */
+	public abstract void setRank(int rank);
+	
+	/**
+	 * Returns the crowding distance for this individual after non-dominated sorting.
+	 * 
+	 * @return crowdingDistance
+	 */
+	public abstract double getCrowdingDistance();
+	
+	/**
+	 * Sets the crowding distance for this individual after non-dominated sorting.
+	 * 
+	 * @param crowdingDistance
+	 */
+	public abstract void setCrowdingDistance(double crowdingDistance);
 
 }
