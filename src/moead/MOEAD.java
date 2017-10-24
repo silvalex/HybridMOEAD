@@ -10,6 +10,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -224,91 +225,6 @@ public class MOEAD {
 		}
 	}
 
-//	public MOEAD(String[] args) {
-//		parseParamsFile(args[0]);
-//
-//		// Read in any additional parameters
-//		for (int i = 1; i < args.length; i +=2) {
-//			setParam(args[i], args[i+1]);
-//		}
-//
-//		int generation = 0;
-//		indType.setInit(this);
-//
-//		// Initialise
-//		long startTime = System.currentTimeMillis();
-//		Set<Individual> externalPopulation = new HashSet<Individual>();
-//
-//		initialise();
-//		breedingTime[generation] = System.currentTimeMillis() - startTime;
-//
-//		// While stopping criteria not met
-//		while(!stopCrit.stoppingCriteriaMet()) {
-//			startTime = System.currentTimeMillis();
-//			// Create an array to hold the new generation
-//			Individual[] newGeneration = new Individual[popSize];
-//			System.arraycopy(population, 0, newGeneration, 0, popSize);
-//
-//			// Evolve new individuals for each problem
-//			for (int i = 0; i < popSize; i++) {
-//				Individual oldInd = population[i];
-//				Individual newInd = evolveNewIndividual(oldInd, i, random);
-//
-//				// Update individual itself
-//				double oldScore;
-//				if (tchebycheff)
-//					oldScore = calculateTchebycheffScore(population[i], i);
-//				else
-//					oldScore = calculateScore(population[i], i);
-//
-//				double newScore;
-//				if (tchebycheff)
-//					newScore = calculateTchebycheffScore(newInd, i);
-//				else
-//					newScore= calculateScore(newInd, i);
-//				if (newScore < oldScore) {
-//					// Replace neighbour with new solution in new generation
-//					newGeneration[i] = newInd;
-//				}
-//
-//				// Update neighbours
-//				updateNeighbours(newInd, i, newGeneration);
-//				// Update reference points
-//				if (tchebycheff)
-//					updateReference(newInd);
-//			}
-//			// If using dynamic normalisation, finish evaluating the population
-//			if (dynamicNormalisation)
-//				finishEvaluating();
-//			// Copy the next generation over as the new population
-//			population = newGeneration;
-//			// Update the external population
-//			Collections.addAll(externalPopulation, population);
-//			externalPopulation = produceParetoFront(externalPopulation);
-//			long endTime = System.currentTimeMillis();
-//			evaluationTime[generation] = endTime - startTime;
-//			// Write out stats
-//			writeOutStatistics(outWriter, generation);
-//			generation++;
-//		}
-//
-//		// Write the front to disk
-//		writeFrontStatistics(frontWriter, externalPopulation);
-//
-//		// Close writers
-//		try {
-//			outWriter.close();
-//			frontWriter.close();
-//		}
-//		catch (IOException e) {
-//			System.err.println("Cannot close stat writers.");
-//			e.printStackTrace();
-//		}
-//
-//		System.out.println("Done!");
-//
-//	}
-
 	public MOEAD(String[] args) {
 		parseParamsFile(args[0]);
 
@@ -358,18 +274,46 @@ public class MOEAD {
 			if (dynamicNormalisation)
 				finishEvaluatingOffspring(offspringPopulation);
 
-		    // Sort the solutions in the combination of current main population and the offspring population using NSGA-II sorting.
+		    // Combine current population with offspring
 			List<Individual> currentPlusOffspring = new ArrayList<Individual>();
 			for (Individual ind : population)
 				currentPlusOffspring.add(ind);
 			currentPlusOffspring.addAll(offspringPopulation);
-			
-			performNonDominatedSorting(currentPlusOffspring);
-			
-			// Keep the best N solutions recorded (since it's sorted, the first N solutions)
+
+			// Calculate ranking and crowding distance
+			List<List<Individual>> fronts = performNonDominatedSorting(currentPlusOffspring);
+			for (List<Individual> front : fronts) {
+				calculateCrowdingDistance(front);
+			}
+
+			// Sort according to rank and crowding distance
+			Comparator<Individual> comp = new Comparator<Individual>() {
+				@Override
+				public int compare(Individual o1, Individual o2) {
+					if (o1.getRank() < o2.getRank()) {
+						return -1;
+					}
+					else if (o1.getRank() > o2.getRank()) {
+						return 1;
+					}
+					else {
+						if (o1.getCrowdingDistance() < o2.getCrowdingDistance()) {
+							return 1;
+						}
+						else if (o1.getCrowdingDistance() > o2.getCrowdingDistance()) {
+							return -1;
+						}
+						else {
+							return 0;
+						}
+					}
+				}
+			};
+			Collections.sort(currentPlusOffspring, comp);
+
+			// Keep the best N solutions recorded as the new population (since it's sorted, the first N solutions)
 			currentPlusOffspring = currentPlusOffspring.subList(0, popSize - 1);
 			currentPlusOffspring.toArray(population);
-
 
 			long endTime = System.currentTimeMillis();
 			evaluationTime[generation] = endTime - startTime;
@@ -1333,15 +1277,16 @@ public class MOEAD {
 			}
 		}
 	}
-	
+
 	/**
 	 * Performs the non-dominated sorting of the population provided, calculating
 	 * the rank and crowding distance for each of the individuals. Based on the Ruby
 	 * code found at http://www.cleveralgorithms.com/nature-inspired/evolution/nsga.html
-	 * 
+	 *
 	 * @param population
+	 * @return list of fronts
 	 */
-	private void performNonDominatedSorting(List<Individual> population) {
+	private List<List<Individual>> performNonDominatedSorting(List<Individual> population) {
 		List<List<Individual>> fronts = new ArrayList<List<Individual>>();
 		Map<Individual, Set<Individual>> dominationSetMap = new HashMap<Individual, Set<Individual>>();
 		Map<Individual, Integer> dominationCountMap = new HashMap<Individual, Integer>();
@@ -1370,51 +1315,65 @@ public class MOEAD {
 			}
 		}
 		int current = 0;
-		ArrayList<Individual> nextFront;
-		for () {
-			
+		while (current < fronts.size()) {
+			ArrayList<Individual> nextFront = new ArrayList<Individual>();
+			for (Individual ind1: fronts.get(current)) {
+				for (Individual ind2 : dominationSetMap.get(ind1)) {
+					dominationCountMap.put(ind2, dominationCountMap.get(ind2) - 1);
+					if (dominationCountMap.get(ind2) == 0) {
+						ind2.setRank(current + 1);
+						nextFront.add(ind2);
+					}
+				}
+			}
+			current++;
+			if (!nextFront.isEmpty()) {
+				fronts.add(nextFront);
+			}
 		}
-		
-//		def fast_nondominated_sort(pop) XXX
-//		  fronts = Array.new(1){[]}
-//		  pop.each do |p1|
-//		    p1[:dom_count], p1[:dom_set] = 0, []
-//		    pop.each do |p2|
-//		      if dominates(p1, p2)
-//		        p1[:dom_set] << p2
-//		      elsif dominates(p2, p1)
-//		        p1[:dom_count] += 1
-//		      end
-//		    end
-//		    if p1[:dom_count] == 0
-//		      p1[:rank] = 0
-//		      fronts.first << p1
-//		    end
-//		  end
-//		  curr = 0
-//		  begin
-//		    next_front = []
-//		    fronts[curr].each do |p1|
-//		      p1[:dom_set].each do |p2|
-//		        p2[:dom_count] -= 1
-//		        if p2[:dom_count] == 0
-//		          p2[:rank] = (curr+1)
-//		          next_front << p2
-//		        end
-//		      end
-//		    end
-//		    curr += 1
-//		    fronts << next_front if !next_front.empty?
-//		  end while curr < fronts.size
-//		  return fronts
-//		end
-
+		return fronts;
 	}
-	
+
+	/**
+	 * Calculates the crowding distance for each individual in the given front.
+	 *
+	 * @param front
+	 */
+	private void calculateCrowdingDistance(List<Individual> front) {
+		for (Individual i : front)
+			i.setCrowdingDistance(0.0);
+		for (int obj = 0; obj < numObjectives; obj++) {
+			final int finalObj = obj;
+			// Sort the front according to the objective value
+			Comparator<Individual> comp = new Comparator<Individual>() {
+				@Override
+				public int compare(Individual o1, Individual o2) {
+					if (o1.getObjectiveValues()[finalObj] < o2.getObjectiveValues()[finalObj])
+						return -1;
+					else if ((o1.getObjectiveValues()[finalObj] > o2.getObjectiveValues()[finalObj]))
+						return 1;
+					else
+						return 0;
+				}
+			};
+			Collections.sort(front, comp);
+			// Set first and last points (the boundary points to infinite) so that they are always selected
+			front.get(0).setCrowdingDistance(Double.POSITIVE_INFINITY);
+			front.get(front.size()-1).setCrowdingDistance(Double.POSITIVE_INFINITY);
+			// All other points must be set according to a formula that takes into account the neighbouring individuals
+			for (int i = 0; i < front.size() - 1; i++ ) {
+				double oldDistance = front.get(i).getCrowdingDistance();
+				double prevObj = front.get(i-1).getObjectiveValues()[finalObj];
+				double nextObj = front.get(i + 1).getObjectiveValues()[finalObj];
+				front.get(i).setCrowdingDistance(oldDistance + (nextObj - prevObj)/(2.0 - 0.0));
+			}
+		}
+	}
+
 	/**
 	 * Checks whether the first individual dominates the second one regarding
 	 * all objectives.
-	 * 
+	 *
 	 * @param ind1
 	 * @param ind2
 	 * @return true if ind1 dominates ind2, false otherwise

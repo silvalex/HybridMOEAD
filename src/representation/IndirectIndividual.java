@@ -21,6 +21,8 @@ public class IndirectIndividual extends Individual {
 	private Service[] genome;
 	private double[] objectives;
 	private MOEAD init;
+	private int rank;
+	private double crowdingDistance;
 
 	@Override
 	public Individual generateIndividual() {
@@ -331,7 +333,7 @@ public class IndirectIndividual extends Individual {
 	public List<InputNodeLayerTrio> getInputsSatisfiedGraphBuilding(List<InputNodeLayerTrio> inputsToSatisfy, Node n, MOEAD init) {
 	    List<InputNodeLayerTrio> satisfied = new ArrayList<InputNodeLayerTrio>();
 	    for(InputNodeLayerTrio p : inputsToSatisfy) {
-            if (init.taxonomyMap.get(p.input).servicesWithOutput.contains( n.getService() ))
+            if (init.taxonomyMap.get(p.input).servicesWithOutput.contains( n.getService()))
                 satisfied.add( p );
         }
 	    return satisfied;
@@ -340,6 +342,26 @@ public class IndirectIndividual extends Individual {
 	@Override
 	public void setInit(MOEAD init) {
 		this.init = init;
+	}
+
+	@Override
+	public int getRank() {
+		return rank;
+	}
+
+	@Override
+	public void setRank(int rank) {
+		this.rank = rank;
+	}
+
+	@Override
+	public double getCrowdingDistance() {
+		return crowdingDistance;
+	}
+
+	@Override
+	public void setCrowdingDistance(double crowdingDistance) {
+		this.crowdingDistance = crowdingDistance;
 	}
 
 }
