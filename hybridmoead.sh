@@ -76,7 +76,7 @@ ls -la
 DIR_HOME="/u/students/sawczualex/"
 DIR_GRID="/vol/grid-solar/sgeusers/sawczualex/"
 DIR_WORKSPACE="workspace/"
-DIR_PROGRAM=$DIR_HOME$DIR_WORKSPACE/"MyMOEAD/"
+DIR_PROGRAM=$DIR_HOME$DIR_WORKSPACE/"HybridMOEAD/"
 DIR_OUTPUT=$DIR_GRID$2 # Name of directory containing output
 
 FILE_JOB_LIST="CURRENT_JOBS.txt"

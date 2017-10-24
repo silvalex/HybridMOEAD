@@ -238,10 +238,13 @@ public class MOEAD {
 
 		// Initialise
 		long startTime = System.currentTimeMillis();
-		Set<Individual> externalPopulation = new HashSet<Individual>();
-		Set<Individual> offspringPopulation = new HashSet<Individual>();
 
 		initialise();
+		Set<Individual> externalPopulation = new HashSet<Individual>();
+		Set<Individual> offspringPopulation = new HashSet<Individual>();
+		for (Individual ind : population)
+			externalPopulation.add(ind);
+
 		breedingTime[generation] = System.currentTimeMillis() - startTime;
 
 		// While stopping criteria not met
@@ -263,11 +266,6 @@ public class MOEAD {
 				// Update external population
 				externalPopulation.add(newInd);
 				externalPopulation = produceParetoFront(externalPopulation);
-				long endTime = System.currentTimeMillis();
-				evaluationTime[generation] = endTime - startTime;
-				// Write out stats
-				writeOutStatistics(outWriter, generation);
-				generation++;
 			}
 
 			// If using dynamic normalisation, finish evaluating the population
@@ -312,7 +310,7 @@ public class MOEAD {
 			Collections.sort(currentPlusOffspring, comp);
 
 			// Keep the best N solutions recorded as the new population (since it's sorted, the first N solutions)
-			currentPlusOffspring = currentPlusOffspring.subList(0, popSize - 1);
+			currentPlusOffspring = currentPlusOffspring.subList(0, popSize);
 			currentPlusOffspring.toArray(population);
 
 			long endTime = System.currentTimeMillis();
