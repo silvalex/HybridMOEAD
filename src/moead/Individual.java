@@ -89,6 +89,29 @@ public abstract class Individual implements Cloneable {
 		}
 		return equivalent && higher;
 	}
+	
+	/**
+	 * Checks whether one individual is equivalent to another (i.e. has all objectives being
+	 * the same).
+	 * 
+	 * @param other individual.
+	 * @return true if equivalent, false otherwise.
+	 */
+	public boolean isEquivalent(Individual other) {
+		double[] thisObjValues = getObjectiveValues();
+		double[] otherObjValues = other.getObjectiveValues();
+
+		boolean equivalent = true;
+
+		for (int i = 0; i < thisObjValues.length; i++) {
+			// Check if this individual has equivalent values for this objective
+			if (thisObjValues[i] != otherObjValues[i]) {
+				equivalent = false;
+				break;
+			}
+		}
+		return equivalent;
+	}
 
 	/**
 	 * Sets the associated init class to the individual, for accessing global values.

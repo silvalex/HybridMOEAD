@@ -265,7 +265,6 @@ public class MOEAD {
 
 				// Update external population
 				externalPopulation.add(newInd);
-				externalPopulation = produceParetoFront(externalPopulation);
 			}
 
 			// If using dynamic normalisation, finish evaluating the population
@@ -323,6 +322,7 @@ public class MOEAD {
 		}
 
 		// Write the front to disk
+		externalPopulation = produceParetoFront(externalPopulation);
 		writeFrontStatistics(frontWriter, externalPopulation);
 
 		// Close writers
@@ -665,7 +665,7 @@ public class MOEAD {
 			 * check whether any individuals currently in the front should be removed (i.e. whether
 			 * they are dominated by the current individual).*/
 			for (Individual f: front) {
-				if (i.dominates(f)) {
+				if (i.dominates(f) || i.isEquivalent(f)) {
 					toRemove.add(f);
 				}
 				else if (f.dominates(i)) {
