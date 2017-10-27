@@ -311,7 +311,9 @@ public class MOEAD {
 
 			// Keep the best N solutions recorded as the new population (since it's sorted, the first N solutions)
 			currentPlusOffspring = currentPlusOffspring.subList(0, popSize);
-			currentPlusOffspring.toArray(population);
+			Individual[] offspring = new Individual[popSize];
+			currentPlusOffspring.toArray(offspring);
+			population = offspring;
 
 			long endTime = System.currentTimeMillis();
 			evaluationTime[generation] = endTime - startTime;
@@ -1286,6 +1288,8 @@ public class MOEAD {
 	 */
 	private List<List<Individual>> performNonDominatedSorting(List<Individual> population) {
 		List<List<Individual>> fronts = new ArrayList<List<Individual>>();
+		List<Individual> firstFront = new ArrayList<Individual>();
+		fronts.add(0, firstFront);
 		Map<Individual, Set<Individual>> dominationSetMap = new HashMap<Individual, Set<Individual>>();
 		Map<Individual, Integer> dominationCountMap = new HashMap<Individual, Integer>();
 		for (Individual ind1: population) {
@@ -1296,31 +1300,35 @@ public class MOEAD {
 						domSet = new HashSet<Individual>();
 						dominationSetMap.put(ind1, domSet);
 					}
+					domSet.add(ind2);
 				}
 				else if (dominates(ind2, ind1)) {
 					Integer domCount = dominationCountMap.get(ind1);
 					if (domCount == null)
 						dominationCountMap.put(ind1, 1);
 					else
-						dominationCountMap.put(ind1, dominationCountMap.get(ind1) + 1);
+						dominationCountMap.put(ind1, domCount + 1);
 				}
 			}
 			Integer count = dominationCountMap.get(ind1);
-			if (count != null && count == 0) {
+			if (count == null) {
 				ind1.setRank(0);
-				fronts.set(0, new ArrayList<Individual>());
-				fronts.get(0).add(ind1);
+				firstFront.add(ind1);
 			}
 		}
 		int current = 0;
 		while (current < fronts.size()) {
 			ArrayList<Individual> nextFront = new ArrayList<Individual>();
 			for (Individual ind1: fronts.get(current)) {
-				for (Individual ind2 : dominationSetMap.get(ind1)) {
-					dominationCountMap.put(ind2, dominationCountMap.get(ind2) - 1);
-					if (dominationCountMap.get(ind2) == 0) {
-						ind2.setRank(current + 1);
-						nextFront.add(ind2);
+				if (dominationSetMap.get(ind1) != null) {
+					for (Individual ind2 : dominationSetMap.get(ind1)) {
+						if (dominationCountMap.get(ind2) == null)
+							dominationCountMap.put(ind2, 0);
+						dominationCountMap.put(ind2, dominationCountMap.get(ind2) - 1);
+						if (dominationCountMap.get(ind2) == 0) {
+							ind2.setRank(current + 1);
+							nextFront.add(ind2);
+						}
 					}
 				}
 			}
@@ -1359,7 +1367,7 @@ public class MOEAD {
 			front.get(0).setCrowdingDistance(Double.POSITIVE_INFINITY);
 			front.get(front.size()-1).setCrowdingDistance(Double.POSITIVE_INFINITY);
 			// All other points must be set according to a formula that takes into account the neighbouring individuals
-			for (int i = 0; i < front.size() - 1; i++ ) {
+			for (int i = 1; i < front.size() - 1; i++ ) {
 				double oldDistance = front.get(i).getCrowdingDistance();
 				double prevObj = front.get(i-1).getObjectiveValues()[finalObj];
 				double nextObj = front.get(i + 1).getObjectiveValues()[finalObj];
