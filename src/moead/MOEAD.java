@@ -64,6 +64,8 @@ public class MOEAD {
 	public static String serviceTask = "problem.xml";
 	public static boolean tchebycheff = true;
 	public static boolean dynamicNormalisation = false;
+	public static boolean tournamentSelection = false;
+	public static int tournamentSize = 2;
 	// Fitness weights
 	public static double w1 = 0.25;
 	public static double w2 = 0.25;
@@ -181,6 +183,12 @@ public class MOEAD {
 				break;
 			case "numLocalSearchTries":
 				numLocalSearchTries = Integer.valueOf(param);
+				break;
+			case "tournamentSelection":
+				tournamentSelection = Boolean.valueOf(param);
+				break;
+			case "tournamentSize":
+				tournamentSize = Integer.valueOf(param);
 				break;
 			case "outFileName":
 				outFileName = param;
@@ -417,6 +425,9 @@ public class MOEAD {
 		// Ensure that mutation, crossover, and local search probabilities add up to 1
 		if (mutationProbability + crossoverProbability + localSearchProbability != 1.0)
 			throw new RuntimeException("The probabilities for mutation, crossover, and local search should add up to 1.");
+		// Ensure that tournament size is smaller than the neighbourhood
+		if (tournamentSelection && tournamentSize > numNeighbours)
+			throw new RuntimeException("The tournament size exceeds the size of the neighbourhood.");
 		// Initialise random number
 		random = new Random(seed);
 		// Initialise the reference point
@@ -561,11 +572,11 @@ public class MOEAD {
 
 		// Perform crossover if that is the chosen operation
 		if (chosenOperation == CROSSOVER) {
-			// Select two neighbours at random
-			int neighbour1Index = random.nextInt(numNeighbours);
-			int neighbour2Index = neighbour1Index;
-			while (neighbour2Index != neighbour1Index) {
-				neighbour2Index = random.nextInt(numNeighbours);
+			// Select two candidates
+			int neighbour1Index = selectNeighbour(index);
+			int neighbour2Index = selectNeighbour(index);
+			while (neighbour2Index == neighbour1Index) {
+				neighbour2Index = selectNeighbour(index);
 			}
 
 			Individual neighbour1 = population[neighbour1Index];
@@ -574,18 +585,78 @@ public class MOEAD {
 		}
 		// Else, perform mutation
 		else if (chosenOperation == MUTATION) {
-			// Select a candidate at random
-			Individual neighbour = population[random.nextInt(numNeighbours)];
+			// Select a candidate index
+			int neighbourIndex = selectNeighbour(index);
+			Individual neighbour = population[neighbourIndex];
 			return mutOperator.mutate(neighbour.clone(), this);
 		}
 		// Else, perform local search
 		else if (chosenOperation == LOCAL_SEARCH) {
-			// Select a candidate at random
-			Individual neighbour = population[random.nextInt(numNeighbours)];
+			// Select a candidate
+			int neighbourIndex = selectNeighbour(index);
+			Individual neighbour = population[neighbourIndex];
 			return localOperator.doSearch(neighbour.clone(), this, index);
 		}
 		else {
 			throw new RuntimeException("Invalid operation selected.");
+		}
+	}
+
+	private int selectNeighbour(int index) {
+
+		// If using tournament selection
+		if (tournamentSelection) {
+			// Select the specified number of neighbours for the tournament
+			Set<Integer> tournamentIndices = new HashSet<Integer>();
+			while (tournamentIndices.size() < tournamentSize) {
+				int neighbourIndex = random.nextInt(numNeighbours);
+				if (!tournamentIndices.contains(neighbourIndex)) {
+					tournamentIndices.add(neighbourIndex);
+				}
+			}
+
+			// Find corresponding candidate for neighbour and its score for our particular subproblem
+			List<CandidateScorePair> candScoreList = new ArrayList<CandidateScorePair>();
+			for (int neighbourIndex : tournamentIndices) {
+				int populationIndex = neighbourhood[index][neighbourIndex];
+				Individual neighbour = population[populationIndex];
+		    	double score;
+				if (MOEAD.tchebycheff)
+					score = calculateTchebycheffScore(neighbour, index);
+				else
+					score = calculateScore(neighbour, index);
+				candScoreList.add(new CandidateScorePair(score,populationIndex));
+			}
+
+			// Sort candidates according to their scores
+			Collections.sort(candScoreList);
+			// Return the one with the highest score
+			return candScoreList.get(0).populationIndex;
+		}
+		// Else, use random selection
+		else {
+			int neighbourIndex = random.nextInt(numNeighbours);
+			int populationIndex = neighbourhood[index][neighbourIndex];
+			return populationIndex;
+		}
+	}
+
+	// Helper class for tournament selection
+	class CandidateScorePair implements Comparable<CandidateScorePair>{
+		public double score;
+		public int populationIndex;
+		public CandidateScorePair(double score, int populationIndex){
+			this.score = score;
+			this.populationIndex = populationIndex;
+		}
+		@Override
+		public int compareTo(CandidateScorePair o) {
+			if (score > o.score)
+				return -1;
+			else if (score < o.score)
+				return 1;
+			else
+				return 0;
 		}
 	}
 
