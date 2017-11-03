@@ -652,9 +652,9 @@ public class MOEAD {
 		@Override
 		public int compareTo(CandidateScorePair o) {
 			if (score > o.score)
-				return -1;
-			else if (score < o.score)
 				return 1;
+			else if (score < o.score)
+				return -1;
 			else
 				return 0;
 		}
